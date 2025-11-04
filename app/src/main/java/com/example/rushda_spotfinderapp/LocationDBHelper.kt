@@ -24,6 +24,7 @@ import android.widget.Toast
 class LocationDBHelper(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
+    // Store context for showing Toast messages
     private val ctx = context
 
     companion object {
@@ -42,13 +43,16 @@ class LocationDBHelper(context: Context) :
      * @param db The database.
      */
     override fun onCreate(db: SQLiteDatabase) {
+        // SQL statement to create the locations table with a unique constraint on the address
         val createTable = """CREATE TABLE $TABLE_NAME (
             $COL_ID INTEGER PRIMARY KEY AUTOINCREMENT,
             $COL_ADDRESS TEXT UNIQUE,
             $COL_LAT REAL,
             $COL_LON REAL
         )"""
+        // Execute the SQL statement
         db.execSQL(createTable)
+        // Populate the newly created table with initial data
         preloadLocations(db)
     }
 
@@ -60,6 +64,7 @@ class LocationDBHelper(context: Context) :
      * @param newVersion The new database version.
      */
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Simple upgrade strategy: drop the old table and create a new one
         db.execSQL("DROP TABLE IF EXISTS $TABLE_NAME")
         onCreate(db)
     }
@@ -73,13 +78,16 @@ class LocationDBHelper(context: Context) :
      * @param lon The longitude of the location.
      */
     fun addLocation(address: String, lat: Double, lon: Double) {
+        // Get a writable database instance
         val db = writableDatabase
+        // ContentValues is used to store a set of key-value pairs for insertion
         val values = ContentValues().apply {
             put(COL_ADDRESS, address)
             put(COL_LAT, lat)
             put(COL_LON, lon)
         }
 
+        // Insert the new row, returning the row ID or -1 if an error occurred (e.g., duplicate address)
         val result = db.insert(TABLE_NAME, null, values)
         if (result == -1L)
             Toast.makeText(ctx, "Failed to add (already exists?)", Toast.LENGTH_SHORT).show()
@@ -98,24 +106,30 @@ class LocationDBHelper(context: Context) :
      */
     fun updatePartial(original: String, newName: String?, lat: Double?, lon: Double?) {
         val db = writableDatabase
+        // First, query for the existing record to get its current values. This also checks if it exists.
         val current = queryLocationCaseInsensitive(original) ?: run {
+            // If query returns null, the location doesn't exist. Show a message and exit the function.
             Toast.makeText(ctx, "Not found", Toast.LENGTH_SHORT).show()
             return
         }
 
+        // Destructure the Triple returned from the query into individual variables
         val (currLat, currLon, currName) = current
+        // Determine the final values: use the new value if provided, otherwise keep the current value
         val finalName = if (!newName.isNullOrBlank()) newName else currName
         val finalLat = lat ?: currLat
         val finalLon = lon ?: currLon
 
+        // Prepare the new values for the database update
         val values = ContentValues().apply {
             put(COL_ADDRESS, finalName)
             put(COL_LAT, finalLat)
             put(COL_LON, finalLon)
         }
 
+        // Perform the update using a case-insensitive WHERE clause to find the original record
         db.update(TABLE_NAME, values, "LOWER($COL_ADDRESS)=LOWER(?)", arrayOf(original))
-        db.close()
+        db.close() // It's good practice to close the database when done
     }
 
     /**
@@ -125,6 +139,7 @@ class LocationDBHelper(context: Context) :
      */
     fun deleteLocation(address: String) {
         val db = writableDatabase
+        // The delete method returns the number of rows affected.
         val result = db.delete(TABLE_NAME, "$COL_ADDRESS=?", arrayOf(address))
         if (result > 0)
             Toast.makeText(ctx, "Deleted successfully", Toast.LENGTH_SHORT).show()
@@ -142,17 +157,22 @@ class LocationDBHelper(context: Context) :
     fun queryLocationCaseInsensitive(address: String): Triple<Double, Double, String>? {
         val db = readableDatabase
         var result: Triple<Double, Double, String>? = null
+        // Use rawQuery for a custom SQL statement with a case-insensitive WHERE clause
         val cursor = db.rawQuery(
+            // LOWER() function makes the comparison case-insensitive
             "SELECT $COL_ADDRESS, $COL_LAT, $COL_LON FROM $TABLE_NAME WHERE LOWER($COL_ADDRESS) = LOWER(?)",
             arrayOf(address)
         )
+        // Move cursor to the first result. If it returns true, a record was found.
         if (cursor.moveToFirst()) {
+            // Retrieve data from the cursor by column index
             val matchedName = cursor.getString(0)
             val lat = cursor.getDouble(1)
             val lon = cursor.getDouble(2)
+            // Package the data into a Triple to be returned
             result = Triple(lat, lon, matchedName)
         }
-        cursor.close()
+        cursor.close() // Always close the cursor to release its resources
         return result
     }
 
@@ -164,14 +184,17 @@ class LocationDBHelper(context: Context) :
     fun getAllLocations(): List<Triple<String, Double, Double>> {
         val db = readableDatabase
         val list = mutableListOf<Triple<String, Double, Double>>()
+        // Simple query to select all columns from all rows
         val cursor = db.rawQuery("SELECT address, latitude, longitude FROM locations", null)
+        // Loop through all the rows in the cursor
         while (cursor.moveToNext()) {
+            // Extract data for the current row
             val address = cursor.getString(0)
             val lat = cursor.getDouble(1)
             val lon = cursor.getDouble(2)
             list.add(Triple(address, lat, lon))
         }
-        cursor.close()
+        cursor.close() // Clean up the cursor
         return list
     }
 
@@ -183,13 +206,14 @@ class LocationDBHelper(context: Context) :
      * @param db The SQLiteDatabase instance to insert data into.
      */
     private fun preloadLocations(db: SQLiteDatabase) {
-        // Prevent duplicates if already populated
+        // Check if the table already has data before preloading
         val cursor = db.rawQuery("SELECT COUNT(*) FROM $TABLE_NAME", null)
         cursor.moveToFirst()
         val count = cursor.getInt(0)
         cursor.close()
+        // If count is greater than 0, the table is not empty, so we skip preloading.
         if (count > 0) {
-            return
+            return // Exit the function
         }
 
         val locations = listOf(
@@ -295,6 +319,7 @@ class LocationDBHelper(context: Context) :
             "Halton Hills" to Pair(43.64, -79.94)
         )
 
+        // Shuffle the list to insert in a random order, then iterate and insert each location
         locations.shuffled().forEach { (name, coords) ->
             val values = ContentValues().apply {
                 put(COL_ADDRESS, name)
@@ -304,6 +329,7 @@ class LocationDBHelper(context: Context) :
             db.insert(TABLE_NAME, null, values)
         }
 
+        // Add a specific set of test data for predictable testing of CRUD operations
         val testSet = listOf(
             "TestTown1" to Pair(43.999, -79.111),
             "DeleteMeSpot" to Pair(43.666, -79.444),
