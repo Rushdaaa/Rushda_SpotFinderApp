@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">Rushda_SpotFinderApp</string>
+    <string name="search_query_for_a_location_e_g_oshawa">Search / Query for a Location (e.g. Oshawa)</string>
+    <string name="add">Add</string>
+    <string name="update">Update</string>
+    <string name="delete">Delete</string>
+    <string name="show_all_spots">Show All Spots</string>
+    <string name="name">Name</string>
+    <string name="latitude">Latitude</string>
+    <string name="longitude">Longitude</string>
+    <string name="submit">Submit</string>
 </resources>
